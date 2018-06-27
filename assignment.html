@@ -1,0 +1,1115 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>The GapMinder Visualisation Created by Hovik</title>
+	<script type="text/javascript" src="d3/d3.js" charset="utf-8"></script>
+</head>
+<style type="text/css">
+	.x-axis path, .y-axis path,
+	.x-axis line, .y-axis line{
+		fill: none;
+		stroke: black;
+		shape-rendering: crispEdges;
+	}
+	 
+	.x-axis text, .y-axis text {
+		font-family: sans-serif;
+		font-size: 11px;
+	}
+	
+	.tick .grid-line{
+	    stroke: black;
+	    shape-rendering: crispEdges;
+	    stroke-opacity: .2;
+	}
+
+	.control-group {
+	    padding-top: 10px;
+	    margin: 10px;
+	}
+
+	.yearText {
+		font-size:200px;
+		color: #e1e1e1;
+		opacity: 0.6;
+	}
+	div.tooltip {
+	    position: absolute;
+	    width: 150px;
+	    height: auto;
+	    padding: 10px;
+	    font: 12px sans-serif;
+	    text-align: left;
+	    background-color: white;
+	    -webkit-border-radius: 5px;
+	    -moz-border-radius: 5px;
+	    border-radius: 5px;
+	    -webkit-box-shadow: 4px 4px 10px rgba(0, 0, 0, 0.4);
+	    -moz-box-shadow: 4px 4px 10px rgba(0, 0, 0, 0.4);
+	    box-shadow: 4px 4px 10px rgba(0, 0, 0, 0.4);
+	    pointer-events: none;
+	}
+
+</style>
+<body>
+	
+	
+
+	<script type="text/javascript">
+		var width = 900;
+		var height = 500;
+		var padding = { top: 30 , right: 30, bottom: 40, left: 50 };
+		
+		var gapData = [];
+		var yearData = [];
+		var IntervalId = "";
+		var yearDataIndex = 0;
+		var duration = 300;
+
+		//Show different colors according to different regions
+		var colorMap = {
+			'Asia':'#FF5872',
+			'Australia':'#FF5872',
+			'Oceania':'#FF5872',
+			'Europe':'#FFE700',
+			'Africa':'#00D5E9',
+			'North America':'#7FEB00',
+			'Central America':'#7FEB00',
+			'South America':'#7FEB00'
+		};
+
+		//Create SVG for bubble graphs
+		var svg = d3.select("body")
+					.append("svg")
+					.attr("width", width)
+					.attr("height", height)
+					.attr("id", "bubbleSvg");
+
+		
+
+		//This must be created in the body, because Div is not part of the SVG content
+		var div = d3.select("body").append("div")
+			.attr("class", "tooltip")
+			.style("opacity", 0);
+
+
+		var countryNumByRegion = [];
+		var countryNumByType = [];
+
+		var button = d3.select("#button")
+						.attr("y",height + 15)
+						.attr("x", padding.left);
+
+		// Define scale, create Bubble axis ,start-------------------------------------------------------------------------
+		//Outer frame
+		var xAxisWidth = width - padding.left - padding.right;
+		var yAxisWidth = height - padding.top - padding.bottom;
+
+		var xScale = d3.scale.pow()
+							.exponent(0.5)
+							.domain([20,190000])
+							.range([0,xAxisWidth]);
+		var yScale = d3.scale.linear()
+							.domain([15,90])
+							.range([yAxisWidth,0]);
+		var rScale = d3.scale.linear()
+							.domain([0,1400000000])
+							.range([1,50]);
+
+		var xAxis = d3.svg.axis()
+						.scale(xScale)
+						.orient("bottom");
+		var yAxis = d3.svg.axis()
+						.scale(yScale)
+						.orient("left");
+		//Add x axis and its label
+		svg.append("g")
+				.attr("class","x-axis")
+				.attr("transform","translate(" + padding.left + "," + (height - padding.bottom) +  ")")
+				.call(xAxis)
+				.append("text")
+				.attr("x", width - 190)
+		    	.attr("y", -5)
+		    	.style("text-anchor", "middle")
+		    	.attr("font-size", "10px")
+		    	.text("per person (GDP/capita, PPP$ inflation-adjusted)");
+		//Add y axis and its label
+		svg.append("g")
+				.attr("class","y-axis")
+				.attr("transform","translate(" + padding.left + "," + (height - padding.bottom - yAxisWidth) +  ")")
+				.call(yAxis)
+				.append("text")
+				.text("years")
+				.attr("transform","rotate(-90)") //Text Rotation -90°
+				.attr("text-anchor","end") //Font tail Alignment
+				.attr("dy","1em"); //Translate the size of a font along the y-axis
+
+		d3.selectAll("g.x-axis g.tick")
+				.append("line")
+				.classed("grid-line",true)
+				.attr("x1",0)
+				.attr("y1",0)
+				.attr("x2",0)
+				.attr("y2",- yAxisWidth);
+
+		d3.selectAll("g.y-axis g.tick")
+            .append("line")
+                .classed("grid-line", true)
+                .attr("x1", 0)
+                .attr("y1", 0)
+                .attr("x2", xAxisWidth) 
+                .attr("y2", 0);
+
+        svg.append("text")
+        		.attr("transform", "translate(" + (width/2) + "," + (height) + ")")
+        		.style("text-anchor", "middle")
+        		.text("Income"); // X axis label
+
+        svg.append("text")
+        		.attr("transform", "rotate(-90)")
+        		.attr("y", 0)
+        		.attr("x", 0 - (height/2))
+        		.attr("dy", "1em")
+        		.style("text-anchor", "mddle")
+        		.text("Life Expectancy") //y axis label
+		// -----Create Bubble Axis End---------------------------------------------------------------------------------------
+		
+		var barWidth = 650;
+		var barHeight = 500;
+		var svg2 = d3.select("body")
+					.append("svg")
+					.attr("width", barWidth)
+					.attr("height", barHeight)
+					.attr("id", "barSvg");
+
+		var barPadding = { top: 30 , right: 40, bottom: 40, left: 30 };
+		var xBarAxisWidth = barWidth - barPadding.right - barPadding.left;
+		var yBarAxisWidth = barHeight - barPadding.top - barPadding.bottom - 50;
+		var xBarScale = null;
+		var yBarScale = null;
+		var xBarScale2 = null;
+		var yBarScale2 = null;
+
+
+		//Data loading for the first time, and graph initialization
+		d3.csv("Gapminder_All_Time.csv", function(error, csvdata){
+			if(error){
+				console.log(error);
+			}
+
+			//Process year data
+			gapData = csvdata;
+			yearData = processYearData(csvdata);
+			console.log(yearData);
+
+			drawText(d3.min(yearData));
+			drawBubble(processData(d3.min(yearData)), d3.min(yearData));
+		
+			//
+			
+			xBarScale = d3.scale.ordinal()
+						.domain(getRegionList(gapData))
+						.rangeRoundBands([0, xBarAxisWidth],0.3);
+			yBarScale = d3.scale.linear()
+							.domain([0,60])
+							.range([yBarAxisWidth/2,0]);
+			var xBarAxis = d3.svg.axis()
+					.scale(xBarScale)
+					.orient("bottom");
+		
+			var yBarAxis = d3.svg.axis()
+							.scale(yBarScale)
+							.orient("left");
+							
+			svg2.append("g")
+					.attr("class","x-axis")
+					.attr("transform","translate(" + barPadding.left + "," + (barHeight/2 - barPadding.bottom) +  ")")
+					.call(xBarAxis)
+					.append("text")
+					.attr("x", xBarAxisWidth+10)
+			    	.attr("y", barHeight/2 - 250)
+			    	.style("text-anchor", "middle")
+			    	.attr("font-size", "10px")
+			    	.text("/Regions");
+
+						
+			svg2.append("g")
+					.attr("class","y-axis")
+					.attr("transform","translate(" + barPadding.left + "," + (barHeight/2 - barPadding.bottom - yBarAxisWidth/2) +  ")")
+					.call(yBarAxis)
+					.append("text")
+					.text("Numbers")
+					.attr("transform","rotate(-90)") //Text Rotation -90°
+					.attr("text-anchor","end") //Font tail Alignment
+					.attr("dy","1em"); //Translate the size of a font along the y-axis
+
+			xBarScale2 = d3.scale.ordinal()
+						.domain(getGTypeList(gapData))
+						.rangeRoundBands([0, xBarAxisWidth],0.3);
+			yBarScale2 = d3.scale.linear()
+							.domain([0,130])
+							.range([yBarAxisWidth/2,0]);
+			var xBarAxis2 = d3.svg.axis()
+					.scale(xBarScale2)
+					.orient("bottom");
+		
+			var yBarAxis2 = d3.svg.axis()
+							.scale(yBarScale2)
+							.orient("left");
+
+
+			svg2.append("g")
+					.attr("class","x-axis")
+					.attr("transform","translate(" + barPadding.left + "," + (barHeight - barPadding.bottom) +  ")")
+					.call(xBarAxis2)
+					.append("text")
+					.attr("x", xBarAxisWidth-10 )
+			    	.attr("y", barHeight/2 - 220)
+			    	.style("text-anchor", "middle")
+			    	.attr("font-size", "10px")
+			    	.text("/Government types");
+						
+			svg2.append("g")
+					.attr("class","y-axis")
+					.attr("transform","translate(" + barPadding.left + "," + (barHeight - barPadding.bottom - yBarAxisWidth/2) +  ")")
+					.call(yBarAxis2)
+					.append("text")
+					.text("Numbers")
+					.attr("transform","rotate(-90)") 
+					.attr("text-anchor","end") //
+					.attr("dy","1em"); //Translate the size of a font along the y-axis
+
+			yBarScale.range([0,yBarAxisWidth/2]);
+			var currentYear = d3.min(yearData);
+			drawRegionBarChart(getCountryNumByRegion(gapData,currentYear), currentYear);
+			drawGTypeBarChart(getCountryNumByGType(gapData,currentYear),currentYear);
+
+			
+		});
+		// 
+		// 
+		
+		
+
+		//Process the list of regions in the data and extract it separately
+		function getRegionList(data){
+			
+			var json = {};
+			var tempdata = [];
+			for (var i = 0; i < data.length; i++){
+				if(!json[data[i].Region]){
+					tempdata.push(data[i].Region);
+					json[data[i].Region] = 1;
+				}
+			}
+			return tempdata;
+		}
+
+		//Process a list of government types and extract them separately
+		function getGTypeList(data){
+			var json = {};
+			var tempdata = [];
+			for(var i = 0; i < data.length; i++){
+				if(!json[data[i].Government]){
+					tempdata.push(data[i].Government);
+					json[data[i].Government] = 1;
+				}
+			}
+			return tempdata;
+		}
+
+		//Process the year in the data and extract it separately
+		function processYearData(data){
+			var json = {};
+			var tempdata = [];
+			for(var i = 0; i < data.length; i++){
+				if (!json[data[i].Year]){
+					tempdata.push(data[i].Year);
+					json[data[i].Year] = 1;
+				} // Remove Duplicates
+			}
+			tempdata.sort(function(a,b){
+				return a - b;
+			}); // Ascending sort
+			return tempdata;
+		}
+
+		
+		
+		//get input data of barchart to show the number of countries per region 
+		function getCountryNumByRegion(data, year){
+			//Draw bar chart, data preparation
+			countryNumByRegion = d3.nest().key(function(d){
+				return d.Year;
+			}).key(function(d){
+				return d.Region;
+			}).rollup(function(v){
+				return v.length;
+			}).entries(data);
+			console.log(countryNumByRegion);
+			var tempArray = [];
+			for(var i = 0; i < countryNumByRegion.length; i++){
+				if(countryNumByRegion[i].key == year){
+					tempArray = countryNumByRegion[i].values;
+				}
+			}
+			return tempArray;
+		}
+
+		//get input data of barchart to show the number of countries with each government type
+		function getCountryNumByGType(data, year){
+			countryNumByGType = d3.nest().key(function(d){
+				return d.Year;
+			}).key(function(d){
+				return d.Government;
+			}).rollup(function(v){
+				return v.length;
+			}).entries(data);
+			console.log(countryNumByGType);
+			var tempArray = [];
+			for(var i = 0; i < countryNumByGType.length; i++){
+				if(countryNumByGType[i].key == year){
+					tempArray = countryNumByGType[i].values;
+				}
+			}
+			console.log("tempArray",tempArray);
+			return tempArray;
+		}
+
+
+		//draw a barchart to show the number of countries per region 
+		function drawRegionBarChart(dataset, year){
+			console.log(dataset);
+
+
+			var barchartUpdate = svg2.selectAll("rect").data(dataset);
+
+			var barchartEnter = barchartUpdate.enter();
+
+			var barchartExit = barchartUpdate.exit();
+
+
+			barchartUpdate
+				.attr("fill","steelblue")		//Set Color to Steelblue
+				.attr("class","barchartR")
+				.attr("x", function(d,i){		//Set the x-coordinate of a rectangle
+					return barPadding.left + xBarScale(d.key);
+				})
+				.attr("y", function(d){		//Set the y-coordinate of a rectangle
+					console.log(d.values);
+					return barHeight/2 - barPadding.bottom - yBarScale(d.values);
+				})
+				.attr("width",xBarScale.rangeBand())		//Set the width of a rectangle
+				.attr("height",function(d){	//Set the height of a rectangle
+					return yBarScale(d.values);
+				});
+
+			barchartEnter
+					.append("rect")
+					.attr("fill","steelblue")		
+					.attr("x", function(d,i){	
+						return barPadding.left + xBarScale(d.key);
+					})
+					.attr("y", function(d){		
+						return barHeight/2 - barPadding.bottom - yBarScale(d.values);
+					})
+					.attr("class","barchartR")
+					.attr("width",xBarScale.rangeBand())		
+					.attr("height",function(d){	
+						return yBarScale(d.values);
+					});
+
+			svg2.selectAll(".barchartR")
+					.on("mouseover", function(d) {
+						div.transition()
+							.duration(200)
+							.style("opacity", .9);
+						
+						div.html("Year: "+ year + "<br/>" +"Region:  " + d.key + "<br/>" + "Numbers:  " + d.values )
+							.style("left", (d3.event.pageX) + "px")
+							.style("top", (d3.event.pageY - 28) + "px");
+					})
+					.on("mouseout", function(d) {
+						div.transition()
+						.duration(500)
+						.style("opacity", 0);
+					}); 
+			
+		}
+
+		//draw a barchart to show the number of countries with each government type
+		function drawGTypeBarChart(dataset, year){
+			var barchartUpdate = svg2.selectAll("#GType").data(dataset);
+
+			var barchartEnter = barchartUpdate.enter();
+
+			var barchartExit = barchartUpdate.exit();
+
+			yBarScale2.range([0, yBarAxisWidth/2]);
+			barchartUpdate
+				.attr("fill","steelblue")		
+				.attr("class","barchart")
+				.attr("x", function(d,i){		
+					return barPadding.left + xBarScale2(d.key);
+				})
+				.attr("y", function(d){		
+					console.log(d.values);
+					return barHeight - barPadding.bottom - yBarScale2(d.values);
+				})
+				.attr("width",xBarScale.rangeBand())		
+				.attr("height",function(d){	
+					return yBarScale2(d.values);
+				});
+
+			barchartEnter
+				.append("rect")
+				.attr("fill","steelblue")		
+				.attr("class","barchart")
+				.attr("x", function(d,i){		
+					return barPadding.left + xBarScale2(d.key);
+				})
+				.attr("y", function(d){		
+					return barHeight - barPadding.bottom - yBarScale2(d.values);
+				})
+				.attr("width",xBarScale2.rangeBand())		
+				.attr("height",function(d){	
+					return yBarScale2(d.values);
+				});
+
+			svg2.selectAll(".barchart")
+						.on("mouseover", function(d) {
+							div.transition()
+								.duration(200)
+								.style("opacity", .9);
+							
+							div.html("Year: "+ year + "<br/>" +"Government Type:  " + d.key + "<br/>" + "Numbers:  " + d.values )
+								.style("left", (d3.event.pageX) + "px")
+								.style("top", (d3.event.pageY - 28) + "px");
+						})
+						.on("mouseout", function(d) {
+							div.transition()
+							.duration(500)
+							.style("opacity", 0);
+						}); 
+
+		}
+
+
+		// Year for text making
+		function drawText(year){
+			var text = svg.append("text")
+						.attr("transform", "translate(" + (width/2) + "," + (height/2+50) + ")")
+		        		.style("text-anchor", "middle")
+		        		.classed("yearText",true)
+		        		.text(year);
+		}
+
+
+		function drawBubbleTrend(code){
+
+			var tempdata = [];
+			for(var i = 0; i < gapData.length; i++){
+				if(gapData[i].Code == code){
+					tempdata.push(gapData[i]);
+				}
+			}
+			tempdata.sort(function(a,b){
+				return parseInt(a.Year) - parseInt(b.Year);
+			}); // Ascending sort
+			console.log(tempdata);
+
+			var index = 0;
+			var interValid = setInterval(function(){
+				if (index >= tempdata.length-1){
+					clearInterval(interValid);
+				}
+				var data = [tempdata[index]];
+				svg.selectAll("demo")
+						.data(data)
+						.enter()
+						.append("circle")
+						.attr("class","trend")
+						.attr("fill", function(d){
+							return d3.map(colorMap).get(d.Region);
+						})
+						.attr("cx", function(d){
+							return padding.left + xScale(d.GDP);
+						})
+						.attr("cy", function(d){
+							return height - padding.bottom - yScale(d.LifeExp);
+						})
+						.attr("r", function(d){
+							return rScale(d.Population);
+						})
+						.attr("stroke","black");
+
+				svg.selectAll(".trend")
+						.on("mouseover", function(d) {
+							div.transition()
+								.duration(200)
+								.style("opacity", .9);
+							
+							div.html("Country:  " + d.Country + "<br/>" + "Year:  " + d.Year +"<br/>" + "LifeExp:  "+ d.LifeExp + "<br/>" + "GDP:  " + d.GDP)
+								.style("left", (d3.event.pageX) + "px")
+								.style("top", (d3.event.pageY - 28) + "px");
+						})
+						.on("mouseout", function(d) {
+							div.transition()
+							.duration(500)
+							.style("opacity", 0);
+						}); 
+				console.log(svg.selectAll(".trend"));
+
+				index++;
+			},100);
+
+
+
+		}
+
+		// Bubble Group Making function
+		function drawBubble(inputData, year){
+			//To ensure that the amount of data entered is consistent at the time of the update
+			var bubbleUpdate = svg.selectAll("circle")
+								.data(inputData);
+
+			var bubbleEnter = bubbleUpdate.enter();
+
+			var bubbleExit = bubbleUpdate.exit();
+			yScale.range([0,yAxisWidth]);
+
+			bubbleUpdate.transition()
+						.duration(duration)
+						.attr("fill", function(d){
+							return d3.map(colorMap).get(d.Region);
+						})
+						.attr("class","bubble")
+						.attr("cx", function(d){
+							return padding.left + xScale(d.GDP);
+						})
+						.attr("cy", function(d){
+							return height - padding.bottom - yScale(d.LifeExp);
+						})
+						.attr("r", function(d){
+							return rScale(d.Population);
+						})
+						.attr("stroke","black");
+			
+			bubbleEnter.append("circle")
+						.attr("fill", function(d){
+							return d3.map(colorMap).get(d.Region);
+						})
+						.attr("class","bubble")
+						.attr("cx", function(d){
+							return padding.left;
+						})
+						.attr("cy", function(d){
+							return height - padding.bottom;
+						})
+						.attr("r", function(d){
+							return 7;
+						})
+						.transition()
+						.duration(duration)
+						.attr("fill", function(d){
+							return d3.map(colorMap).get(d.Region);
+						})
+						.attr("cx", function(d){
+							return padding.left + xScale(d.GDP);
+						})
+						.attr("cy", function(d){
+							return height - padding.bottom - yScale(d.LifeExp);
+						})
+						.attr("r", function(d){
+							return rScale(d.Population);
+						})
+						.attr("stroke","black");
+			svg.selectAll("circle")
+						.on("mouseover", function(d) {
+							div.transition()
+								.duration(200)
+								.style("opacity", .9);
+							
+							div.html("Country:  " + d.Country + "<br/>" + "Year:  " + d.Year +"<br/>" + "LifeExp:  "+ d.LifeExp + "<br/>" + "GDP:  " + d.GDP)
+								.style("left", (d3.event.pageX) + "px")
+								.style("top", (d3.event.pageY - 28) + "px");
+						})
+						.on("mouseout", function(d) {
+							div.transition()
+							.duration(500)
+							.style("opacity", 0);
+						}); 
+
+			bubbleExit.transition()				//Start transition when data is deleted
+						.duration(duration)			//Time is 500ms
+						.attr("fill","white")
+						.attr("stroke","white")	//Set a transition target
+						.remove();
+		}
+
+		//Bubble Dynamic Transformation, display
+		function countup(){ // <-A
+			if (IntervalId == ""){
+				var yearText = d3.select(".yearText");
+				var target = d3.max(yearData);
+	        	console.log(target);
+
+        	
+		       	IntervalId = setInterval(function(){ // <-B
+		       		if(yearDataIndex + 1 >= yearData.length) clearInterval(IntervalId); 
+		            var value = yearText.attr("value");
+		            var currentYear = yearData[yearDataIndex];
+		            
+		            yearText.text(currentYear);
+		            drawBubble(processData(currentYear),currentYear);
+		            drawRegionBarChart(getCountryNumByRegion(gapData,currentYear),currentYear);
+		            drawGTypeBarChart(getCountryNumByGType(gapData,currentYear),currentYear);
+		            yearDataIndex ++;            
+		        
+		        },duration);
+		    }
+	    }
+
+	    // function to filter data by year
+	    function processData(year){
+	    	var tempData = [];
+	    	for(var i = 0; i < gapData.length; i++){
+	    		if(gapData[i].Year == year){
+	    			tempData.push(gapData[i]);
+	    		}
+	    	}
+	    	console.log(tempData);
+	    	return tempData;
+	    }
+
+	    //Get country list data in data
+	    function getCountryList(){
+	    	var tempData = [];
+	    	var json = {};
+	    	for(var i = 0; i < gapData.length; i++){
+	    		if(!json[gapData[i].Code]){
+	    			tempData.push(gapData[i]);
+	    			json[gapData[i].Code] = 1;
+	    		}
+	    	}
+	    	tempData.sort(function(a,b){
+	    		var s = a.Code.toLowerCase();
+	    		var t = b.Code.toLowerCase();
+	    		if(s < t) return -1;
+	    		if(s > t) return 1;
+	    		return 0;
+	    	})
+	    	return tempData;
+	    }
+
+
+	    function stop(){
+	    	clearInterval(IntervalId);
+	    	IntervalId = "";
+	    }
+
+	    function reset(){
+	    	d3.selectAll(".yearText").transition(100)// transition
+            .style("opacity", 0.6);// opacity
+
+            d3.selectAll(".bubble").transition(100)// transition
+            .style("opacity", 1);// opacity
+
+	    	clearInterval(IntervalId);
+	    	IntervalId = "";
+	    	yearDataIndex = 0;
+	    	var currentYear = yearData[yearDataIndex];
+	    	d3.select(".yearText").text(currentYear);
+		    drawBubble(processData(currentYear),currentYear);
+		    drawRegionBarChart(getCountryNumByRegion(gapData,currentYear),currentYear);
+		    drawGTypeBarChart(getCountryNumByGType(gapData,currentYear),currentYear);
+	    }
+
+	    function search(){
+
+	    	d3.selectAll(".yearText").transition(100)// transition
+            .style("opacity", 0.6);// opacity
+
+            d3.selectAll(".bubble").transition(100)// transition
+            .style("opacity", 1);// opacity
+
+	    	var select = document.getElementById("selectid");
+	    	clearInterval(IntervalId);
+	    	IntervalId = "";
+	    	yearDataIndex = 0;
+	    	var currentYear = select.value;
+	    	d3.select(".yearText").text(currentYear);
+		    drawBubble(processData(select.value),currentYear);
+		    drawRegionBarChart(getCountryNumByRegion(gapData,currentYear),currentYear);
+		    drawGTypeBarChart(getCountryNumByGType(gapData,currentYear),currentYear);
+	    }
+
+	    function trace(){
+	    	d3.selectAll(".yearText").transition(100)// transition
+            .style("opacity", 0.3);// opacity
+
+            d3.selectAll(".bubble").transition(100)// transition
+            .style("opacity", 0.3);// opacity
+
+	    	svg.selectAll(".trend").remove();
+	    	var select = document.getElementById("countryCode");
+	    	drawBubbleTrend(select.value);
+	    }
+
+
+	    //Draw a line chart
+	    function drawLineChart(data){
+	    	var lineWidth = 1500;
+	    	var lineHeight = 600;
+	    	var lineSvg = d3.select("body")
+    					.append("svg")
+    					.attr("width", lineWidth)
+    					.attr("height", lineHeight)
+    					.attr("id","lineSvg");
+
+	    	var linedata= data;
+	    	console.log(linedata);
+	    	//Outer frame
+	    	var linePadding = { top:20, bottom:80, left:100, right:20 };
+
+	    	//Calculate the population's maximum and minimum values
+	    	var population_max = 0;
+	    	var population_min = 100000000000000000;
+	    	for(var i = 0; i < linedata.length; i++){
+	    		//Maximum Value
+	    		var currMax = d3.max(linedata[i].get("position"), function(d){
+	    			return parseInt(d.Population);
+	    		});
+	    		if(currMax > population_max){
+	    			population_max = currMax;
+	    		}
+
+	    		//the minimum value
+	    		var currMin = d3.min(linedata[i].get("position"), function(d){
+	    			return parseInt(d.Population);
+	    		});
+				if(currMin < population_min){
+	    			population_min = currMin;
+	    		}
+	    	}
+	    	console.log(population_max);
+	    	console.log(population_min);
+	    	
+
+	    	//Calculate scale
+	    	var linexScale = d3.scale.linear()
+	    						.domain([1900, 2020])
+	    						.range([0 , lineWidth - linePadding.left - linePadding.right]);
+
+	    	var lineyScale = d3.scale.linear()
+	    						.domain([population_min*0.7, population_max*1.1])
+	    						.range([lineHeight - linePadding.top - linePadding.bottom , 0]);
+
+	    	//Create a line Builder
+			var linePath = d3.svg.line()
+							.x(function(d){ return linexScale(d.Year); })
+							.y(function(d){ return lineyScale(d.Population); })
+							.interpolate("basis");
+			console.log(linePath);
+			//Define five Colors
+			var colors = ["red","yellow","green","black","blue"];
+
+	    	//Add path
+			lineSvg.selectAll("path")	//Select All <path> in <svg>
+				.data(linedata)		//Binding Data
+				.enter()			//Select the Enter section
+				.append("path")		//Add a sufficient number of <path> elements
+				.attr("transform","translate(" + linePadding.left + "," +  linePadding.top  +")")
+				.attr("d", function(d){
+					console.log(d.get("position"));
+					return linePath(d.get("position"));		//Returns the path to the line builder
+				})	
+				.attr("fill","none")
+				.attr("stroke-width",3)
+				.attr("stroke",function(d,i){
+					return colors[i];
+				});
+
+
+			var markStep = 220;
+			//Generate Diagram Description
+			var gMark = lineSvg.selectAll(".gMark")
+							.data(linedata)
+							.enter()
+							.append("g")
+							.attr("transform",function(d,i){
+								return "translate(" + (linePadding.left + i * markStep)  + "," + ( lineHeight - linePadding.bottom + 40)  +")";
+							});
+				
+			gMark.append("rect")
+					.attr("x",0)
+					.attr("y",0)
+					.attr("width",10)
+					.attr("height",10)
+					.attr("fill",function(d,i){ return colors[i]; });
+
+			gMark.append("text")
+					.attr("dx",15)
+					.attr("dy",".5em")
+					.attr("fill","black")
+					.text(function(d){ 
+						console.log(d);
+						console.log(d.get("country"));
+						return d.get("country"); });		
+
+			//X axis
+			var linexAxis = d3.svg.axis()
+							.scale(linexScale)
+							.ticks(10)
+							.tickFormat(d3.format("d"))
+							.orient("bottom");
+				
+			//y axis
+			var lineyAxis = d3.svg.axis()
+							.scale(lineyScale)
+							.orient("left");
+							
+			lineSvg.append("g")
+					.attr("class","x-axis")
+					.attr("transform","translate(" + linePadding.left + "," + (lineHeight - linePadding.bottom) +  ")")
+					.call(linexAxis)
+					.append("text")
+					.text("The Year")
+					.attr("transform","translate(" + (lineHeight - linePadding.bottom) + "," + linePadding.left  +  ")")
+						
+			lineSvg.append("g")
+					.attr("class","y-axis")
+					.attr("transform","translate(" + linePadding.left + "," + linePadding.top +  ")")
+					.call(lineyAxis)
+					.append("text")
+					.text("The Sum of Population")
+					.attr("transform","rotate(-90)") 
+					.attr("text-anchor","end") 
+					.attr("dy","1em"); 
+				
+
+	    }	
+
+	    // Process raw data and generate data formats that conform to line chart requirements in selected country codes
+	    function selectCountryInfo(data, codes){
+	    	var countriesArray = [];
+	    	for(var i = 0; i < codes.length; i++){
+	    		var popuData = [];
+	    		var countryInfoMap = new Map();
+	    		for(var j = 0; j < data.length; j++){
+	    			if(data[j].Code == codes[i]){
+	    				popuData.push(data[j]);
+	    				countryInfoMap.set("country", data[j].Country);
+	    			}	
+	    		}
+	    		countryInfoMap.set("position",popuData);
+	    		//1900-2016 years of data belonging to the country in ascending order by year
+	    		popuData.sort(function(a,b){
+	    			return a.Year - b.Year;
+	    		})
+	    		countriesArray.push(countryInfoMap);
+	    	}
+
+	    	return countriesArray;
+	    }
+
+	    //Draw Line chart function
+	    function checkBoxList(){
+	    	var checkSelects = document.getElementsByName("countries");
+
+	    	//Determine check box at least one item selected
+	    	var checkNum = 0;
+	    	
+	    	for(var i in checkSelects){
+	    		if(checkSelects[i].checked){
+	    			checkNum++;
+	    		}
+    		}
+    		// No check box is selected to prompt the user
+    		if(checkNum == 0){
+    			alert("Please select at least one of them!");
+	    	}
+
+	    	
+	    	
+	    	//Draw a line chart when the check box is selected
+	    	if(checkNum != 0){
+	    		//Gets the encoded array of the selected country as an input dataset
+	    		var codeArray = [];
+	    		for(var i in checkSelects){
+		    		if(checkSelects[i].checked){
+		    			codeArray.push(checkSelects[i].value);
+		    		}
+    			}
+
+    			//Get input data for a line chart
+    			lineData = selectCountryInfo(gapData, codeArray);
+
+    			var lineSvg = document.getElementById("lineSvg");
+
+    			//Determine if the SVG canvas is already present, and then update the canvas again
+    			if(lineSvg == null){
+    				drawLineChart(lineData);
+    			}
+
+    			if( lineSvg != null){
+    				d3.select("#lineSvg").remove();
+    				drawLineChart(lineData);
+    			}
+    		}
+
+    		for(var i in checkSelects){
+	    		if(checkSelects[i].checked){
+	    			checkSelects[i].checked = false;
+	    		}
+			}
+
+
+	}
+    	//Empty check box contents and generated line chart
+    	function clean(){
+    		var checkSelects = document.getElementsByName("countries");
+    		for(var i in checkSelects){
+	    		if(checkSelects[i].checked){
+	    			checkSelects[i].checked = false;
+	    		}
+			}
+
+			d3.select("#lineSvg").remove();
+
+    	}
+
+
+
+	</script>
+
+	<div id= "function" class="control-group"  style="width:100%">
+
+		<p>Part 1 --- Copying Hans: </p>
+		<span>A: animate the change in country statistics from year to year (1900
+- 2016): </span>
+	    <button onclick="countup()">
+	        Start
+	    </button>
+	     <button onclick="stop()">
+	        Stop
+	    </button>
+	    <button onclick="reset()">
+	        Clear
+	    </button>
+	    <br/>
+		<span>B: view data for a particular year: </span>
+		<button onclick="search()">
+	        Search: 
+	    </button>
+	    <select name="year" id="selectid">
+		
+		</select>
+		<p>Part 2 --- Extending Hans: </p>
+		<span>A: show the journey of a country to be seen as a trace
+of positions in the scatter plot :</span>
+	    <button onclick="trace()">
+	        Show journey of the country selected:
+	    </button>
+	    <select name="" id="countryCode">
+		
+		</select>
+		<br/>
+		<p>B: The extra feature I added to improve the visualisation: </p>
+		<span>Please select the checkbox below to show the population changing trends during the year 1900 to 2016 in different countries </span><br/><br/>
+		<span>Please note: the number of selected countries should not be more than Five! </span> 
+		<button onclick="checkBoxList()">
+			Search!
+		</button>
+		<button onclick="clean()">
+			Clear!
+		</button>
+		<p>--------------------------------------------------------------------------------</p>
+		<div id="countryCheckboxList"></div>
+
+		<script type="text/javascript">
+			//Add dropdown options to the Drop-down menu
+			d3.csv("Gapminder_All_Time.csv", function(error, csvdata){
+				if(error){
+					console.log(error);
+				}
+				console.log(csvdata);
+				var years = processYearData(csvdata);
+
+				//Year List
+				var selectid = document.getElementById("selectid");
+				selectid.options.length = 0;
+				for (var i = 0; i < years.length; i++){
+					selectid[i] = new Option(years[i]);
+				}
+
+				//Country List
+				var countries = getCountryList();
+				var countryCode = document.getElementById("countryCode");
+				countryCode.options.length = 0;
+				for (var i = 0; i < countries.length; i++){
+					countryCode[i] = new Option();
+					countryCode[i].text = countries[i].Country;
+					countryCode[i].value = countries[i].Code;
+				}
+
+				//Country check box
+				var countryCheckboxDiv=document.getElementById("countryCheckboxList");
+			    countryCheckboxDiv.innerHTML="";
+			    
+			    var tableNode = document.createElement("table");
+			   	tableNode.setAttribute("id","table");
+			   	var cols = 9;
+			   	var row = countries.length/cols;
+		   		
+		   		for(var x=0; x<row; x++){
+				    var trNode = tableNode.insertRow(); 
+				    for(var y=0; y<cols; y++){ 
+				     	var tdNode = trNode.insertCell(); 
+				     	index = x * cols + y;
+				     	if(index > countries.length-1) break;
+				     	// Add check box
+				        var checkBox=document.createElement("input");
+				        checkBox.setAttribute("type","checkbox");
+				        checkBox.setAttribute("value",countries[index].Code);
+				        checkBox.setAttribute("name", "countries");
+				     	tdNode.appendChild(checkBox);
+				     	var span = document.createElement("span");
+				     	span.innerText = countries[index].Country;
+				     	tdNode.appendChild(span);
+			    	} 
+				}
+				countryCheckboxDiv.appendChild(tableNode);
+
+			});
+
+			//Limit the maximum number of selections for a check box (5)
+			window.onload = function(){
+				var forbidcheckSelects = document.getElementsByName("countries");
+				var banNums = 5;
+				for(var i in forbidcheckSelects){
+					forbidcheckSelects[i].onclick = function(){
+						var selectNum = 0;
+						for(var i in forbidcheckSelects){
+							if(i == forbidcheckSelects.length) break;
+							if(forbidcheckSelects[i].checked){
+								selectNum++;
+								//this.nextSbiling.style.color="#ff0000";
+								
+							}
+						}
+
+						if(selectNum > banNums){
+							this.checked = false;
+							alert("You can only select up to 5 countries per operation !")
+						}
+					}
+				}
+			}
+
+		</script>
+	</div>
+	
+
+</body>
+</html>
